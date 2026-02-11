@@ -1,11 +1,7 @@
 # Terraform variable definitions for insecure test configuration
 # DO NOT USE IN PRODUCTION
 
-resource_group_name = "rg-insecure-test"
-
 location = "australiaeast"
-
-storage_account_name = "stinsecuretest001"
 
 account_tier = "Standard"
 
