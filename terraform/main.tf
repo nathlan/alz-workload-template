@@ -1,14 +1,19 @@
 # Deliberately insecure configuration for testing purposes
 # DO NOT USE IN PRODUCTION
 
-# Create a resource group using the public module
 module "resource_group" {
-  source = "github.com/nathlan/terraform-azurerm-resourcegroup"
+  source = "github.com/nathlan/terraform-azurerm-resource-group"
 
-  name = var.resource_group_name
-  tags = var.tags
+  workload = "webapp"
+  env      = "prod"
+  team     = "finance"
+  location = "australiaeast"
+
+  tags = {
+    ManagedBy  = "Terraform"
+    CostCenter = "12345"
+  }
 }
-
 # Consume the storage account module with insecure settings
 module "insecure_storage" {
   source = "github.com/nathlan/terraform-azurerm-storage-account"
@@ -18,7 +23,7 @@ module "insecure_storage" {
   location            = module.resource_group.location
 
   # Insecure settings - DO NOT USE IN PRODUCTION
-  min_tls_version               = "TLS1_0" # Use older TLS versions (insecure)
+  min_tls_version               = "TLS1_0" # Use  older TLS versions (insecure)
   enable_https_traffic_only     = false    # Allow HTTP traffic (insecure)
   public_network_access_enabled = true     # Allow public access (insecure)
 
