@@ -1,6 +1,10 @@
 # Security and compliance scanning for Terraform code - Checkov configuration
 
-# Scan Terraform code
+# Config file should exist in current working directory and contain Terraform code
+directory:
+- .
+
+# Scan Terraform code only
 framework:
 - terraform
 
