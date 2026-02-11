@@ -17,7 +17,9 @@ module "resource_group" {
     CostCenter = "12345"
   }
 
-  lock = ["CanNotDelete"]
+  lock = {
+    level = "CanNotDelete"
+  }
 }
 # Consume the storage account module with insecure settings
 module "insecure_storage" {
