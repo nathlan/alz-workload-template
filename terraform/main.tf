@@ -28,8 +28,8 @@ module "insecure_storage" {
   workload            = local.workload
   env                 = local.env
   team                = local.team
-  resource_group_name = module.resource_group.name
-  location            = module.resource_group.location
+  resource_group_name = module.resource_group.resource_group_name
+  location            = module.resource_group.resource_group_location
 
   # Insecure settings - DO NOT USE IN PRODUCTION
   min_tls_version               = "TLS1_0" # Use  older TLS versions (insecure)
