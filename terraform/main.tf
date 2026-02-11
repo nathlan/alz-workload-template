@@ -5,7 +5,8 @@ locals {
 }
 
 module "resource_group" {
-  source = "github.com/nathlan/terraform-azurerm-resource-group"
+  source  = "github.com/nathlan/terraform-azurerm-resource-group"
+  version = "1.0.0"
 
   workload = local.workload
   env      = local.env
@@ -23,7 +24,8 @@ module "resource_group" {
 }
 # Consume the storage account module with insecure settings
 module "insecure_storage" {
-  source = "github.com/nathlan/terraform-azurerm-storage-account"
+  source  = "github.com/nathlan/terraform-azurerm-storage-account"
+  version = "0.1.1"
 
   workload            = local.workload
   env                 = local.env
