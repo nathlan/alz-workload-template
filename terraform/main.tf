@@ -1,12 +1,15 @@
-# Deliberately insecure configuration for testing purposes
-# DO NOT USE IN PRODUCTION
+locals {
+  workload = "webapp"
+  env      = "prod"
+  team     = "finance"
+}
 
 module "resource_group" {
   source = "github.com/nathlan/terraform-azurerm-resource-group"
 
-  workload = "webapp"
-  env      = "prod"
-  team     = "finance"
+  workload = local.workload
+  env      = local.env
+  team     = local.team
   location = "australiaeast"
 
   tags = {
@@ -18,7 +21,9 @@ module "resource_group" {
 module "insecure_storage" {
   source = "github.com/nathlan/terraform-azurerm-storage-account"
 
-  name                = var.storage_account_name
+  workload            = local.workload
+  env                 = local.env
+  team                = local.team
   resource_group_name = module.resource_group.name
   location            = module.resource_group.location
 
