@@ -41,10 +41,17 @@ This repository uses a parent/child workflow pattern:
 Add these secrets in **Settings → Secrets and variables → Actions**:
 
 ```
-AZURE_CLIENT_ID       - Service principal client ID (OIDC)
+AZURE_CLIENT_ID_PLAN  - User-Assigned Managed Identity Client ID for plan (Reader role)
+AZURE_CLIENT_ID_APPLY - User-Assigned Managed Identity Client ID for apply (Owner role)
 AZURE_TENANT_ID       - Azure tenant ID
 AZURE_SUBSCRIPTION_ID - Azure subscription ID
 ```
+
+**Security Model: Least Privilege**
+- **Plan Identity (Reader):** Used for `terraform init` and `terraform plan` operations. Has read-only access to assess changes.
+- **Apply Identity (Owner):** Used for `terraform apply` operations. Has full access to create, modify, and delete resources.
+
+This separation ensures that plan operations cannot accidentally modify infrastructure.
 
 ### 2. Create Environment
 
@@ -87,23 +94,93 @@ Add your Terraform resources to the `terraform/` directory:
 
 ## Azure OIDC Setup
 
-If not already configured, set up Azure OIDC for this repository:
+This repository uses **User-Assigned Managed Identities (UAMIs)** with federated credentials for secure, passwordless authentication to Azure.
+
+### Setup Two Managed Identities
+
+You need to create TWO separate managed identities with federated credentials:
+
+#### 1. Plan Identity (Reader Role)
 
 ```bash
-# Get the App Registration ID
-APP_ID="<your-app-id>"
-REPO_NAME="<this-repo-name>"
+# Create User-Assigned Managed Identity for plan operations
+RESOURCE_GROUP="rg-github-identities"
+PLAN_IDENTITY_NAME="uami-github-${REPO_NAME}-plan"
 
-# Add federated credential for this repository
-az ad app federated-credential create \
-  --id $APP_ID \
-  --parameters "{
-    \"name\": \"github-${REPO_NAME}\",
-    \"issuer\": \"https://token.actions.githubusercontent.com\",
-    \"subject\": \"repo:nathlan/${REPO_NAME}:ref:refs/heads/main\",
-    \"audiences\": [\"api://AzureADTokenExchange\"]
-  }"
+az identity create \
+  --resource-group $RESOURCE_GROUP \
+  --name $PLAN_IDENTITY_NAME
+
+# Get the client ID
+PLAN_CLIENT_ID=$(az identity show \
+  --resource-group $RESOURCE_GROUP \
+  --name $PLAN_IDENTITY_NAME \
+  --query clientId -o tsv)
+
+# Assign Reader role at subscription scope
+az role assignment create \
+  --assignee $PLAN_CLIENT_ID \
+  --role Reader \
+  --scope "/subscriptions/${SUBSCRIPTION_ID}"
+
+# Add federated credential for GitHub Actions
+az identity federated-credential create \
+  --identity-name $PLAN_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-plan" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:environment:production" \
+  --audiences "api://AzureADTokenExchange"
 ```
+
+#### 2. Apply Identity (Owner Role)
+
+```bash
+# Create User-Assigned Managed Identity for apply operations
+APPLY_IDENTITY_NAME="uami-github-${REPO_NAME}-apply"
+
+az identity create \
+  --resource-group $RESOURCE_GROUP \
+  --name $APPLY_IDENTITY_NAME
+
+# Get the client ID
+APPLY_CLIENT_ID=$(az identity show \
+  --resource-group $RESOURCE_GROUP \
+  --name $APPLY_IDENTITY_NAME \
+  --query clientId -o tsv)
+
+# Assign Owner role at subscription scope
+az role assignment create \
+  --assignee $APPLY_CLIENT_ID \
+  --role Owner \
+  --scope "/subscriptions/${SUBSCRIPTION_ID}"
+
+# Add federated credential for GitHub Actions
+az identity federated-credential create \
+  --identity-name $APPLY_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-apply" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:environment:production" \
+  --audiences "api://AzureADTokenExchange"
+```
+
+#### 3. Add Client IDs to GitHub Secrets
+
+```bash
+# Add the plan identity client ID
+gh secret set AZURE_CLIENT_ID_PLAN --body "$PLAN_CLIENT_ID" --repo nathlan/${REPO_NAME}
+
+# Add the apply identity client ID
+gh secret set AZURE_CLIENT_ID_APPLY --body "$APPLY_CLIENT_ID" --repo nathlan/${REPO_NAME}
+```
+
+### Benefits of UAMIs
+
+- ✅ **No stored credentials** - Client IDs are not sensitive
+- ✅ **Least privilege** - Plan uses read-only, apply uses elevated permissions
+- ✅ **Audit trail** - Each identity's actions tracked separately in Azure
+- ✅ **Defense in depth** - Compromised plan job cannot modify infrastructure
 
 ## Support
 
