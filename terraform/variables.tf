@@ -1,24 +1,48 @@
-# ==============================================================================
-# Input Variables
-# ==============================================================================
+variable "resource_group_name" {
+  type        = string
+  description = "The name of the resource group to create."
+}
 
 variable "location" {
   type        = string
-  description = "Azure region for resources"
-  default     = "uksouth"
+  description = "The Azure location where resources should be created."
 }
 
-variable "environment" {
+variable "storage_account_name" {
   type        = string
-  description = "Environment name (e.g., production, staging, development)"
-  default     = "production"
+  description = "The name of the storage account. Must be globally unique."
+}
+
+variable "account_tier" {
+  type        = string
+  description = "Defines the Tier to use for this storage account."
+}
+
+variable "account_replication_type" {
+  type        = string
+  description = "Defines the type of replication to use for this storage account."
+}
+
+variable "account_kind" {
+  type        = string
+  description = "Defines the Kind of account."
+}
+
+variable "access_tier" {
+  type        = string
+  description = "Defines the access tier for the storage account."
+}
+
+variable "containers" {
+  type = map(object({
+    name                  = string
+    container_access_type = optional(string, "private")
+    metadata              = optional(map(string), {})
+  }))
+  description = "Map of blob containers to create."
 }
 
 variable "tags" {
   type        = map(string)
-  description = "Common tags to apply to all resources"
-  default = {
-    ManagedBy = "Terraform"
-    Source    = "nathlan/alz-workload-template"
-  }
+  description = "A mapping of tags to assign to resources."
 }
