@@ -7,9 +7,7 @@ locals {
 module "resource_group" {
   source = "git::github.com/nathlan/terraform-azurerm-resource-group.git?ref=v1.0.0"
 
-  workload = local.workload
-  env      = local.env
-  team     = local.team
+  name     = "my-resource-group"
   location = "australiaeast"
 
   tags = {
