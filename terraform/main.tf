@@ -16,6 +16,8 @@ module "resource_group" {
     ManagedBy  = "Terraform"
     CostCenter = "12345"
   }
+
+  lock = "CanNotDelete"
 }
 # Consume the storage account module with insecure settings
 module "insecure_storage" {
