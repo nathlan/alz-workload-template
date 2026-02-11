@@ -18,7 +18,7 @@ module "resource_group" {
   }
 
   lock = {
-    level = "CanNotDelete"
+    kind = "CanNotDelete"
   }
 }
 # Consume the storage account module with insecure settings
