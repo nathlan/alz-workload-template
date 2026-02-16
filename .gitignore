@@ -19,7 +19,6 @@ terraform.rc
 *.auto.tfvars.json
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo

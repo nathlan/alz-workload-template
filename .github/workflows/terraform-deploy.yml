@@ -55,14 +55,11 @@ jobs:
       # REQUIRED: Deployment environment (must match environment in repo settings)
       environment: ${{ inputs.environment || 'production' }}
 
-      # OPTIONAL: Override Terraform version if needed (default: 1.9.0)
-      terraform-version: '1.9.0'
-
       # REQUIRED: Working directory containing Terraform code
       working-directory: 'terraform'
 
-      # OPTIONAL: Azure region (default: uksouth)
-      azure-region: 'uksouth'
+      # OPTIONAL: Override Azure region if needed
+      azure-region: 'australiaeast'
 
     secrets:
       # REQUIRED: Azure OIDC credentials (configure in repository settings)
