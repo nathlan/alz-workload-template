@@ -12,25 +12,23 @@ network:
     - defaults
     - github
 tools:
+  cache-memory: true
   github:
+    github-token: ${{ secrets.GH_AW_AGENT_TOKEN }}
     toolsets: [pull_requests, repos]
 engine:
   id: copilot
-  steps:
-    - name: Checkout source repo to sync from
-      uses: actions/checkout@v6
-      with:
-        repository: nathlan/shared-standards
-        token: ${{ secrets.GH_AW_AGENT_TOKEN }}
-        path: shared-standards
 safe-outputs:
-  add-comment:
-    max: 1
-    hide-older-comments: true
-    allowed-reasons: [outdated] 
+  github-token: ${{ secrets.GH_AW_AGENT_TOKEN }}
   create-pull-request-review-comment:
     max: 10
     side: "RIGHT"
+  reply-to-pull-request-review-comment:
+    max: 10
+  submit-pull-request-review:
+    max: 1
+  resolve-pull-request-review-thread:
+    max: 10
   messages:
     footer: "> 😤 *Reluctantly reviewed by [{workflow_name}]({run_url})*"
     run-started: "😤 *sigh* [{workflow_name}]({run_url}) is begrudgingly looking at this {event_type}... This better be worth my time."
@@ -62,15 +60,13 @@ You validate code against compliance standards defined in the `nathlan/shared-st
 When running on a PR:
 1. Read standards from shared-standards repo
 2. Analyze PR changes against those standards
-3. Report compliance violations as PR review comments (max 5 comments)
-4. Return results immediately in the PR
+3. Report compliance violations as PR review comments
+4. Submit a consolidated review (APPROVE or REQUEST_CHANGES)
+5. Return results immediately in the PR
 
 ### Step 1: Access Memory
 
 Use the cache memory at `/tmp/gh-aw/cache-memory/` to:
-- Check if you've reviewed this PR before (`/tmp/gh-aw/cache-memory/pr-${{ github.event.pull_request.number }}.json`)
-- Read your previous comments to avoid repeating yourself
-- Note any patterns you've seen across reviews
 
 ### Step 2: Fetch Pull Request Details
 
