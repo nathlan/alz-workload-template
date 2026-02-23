@@ -66,7 +66,7 @@ This workflow synchronizes the contents of the `.github/` directory in this repo
 - The issue must be assigned to `copilot`.
 - The issue title must start with `[shared-assets-sync]`.
 - The issue body must include:
-  - teps for Copilot to perform the update:
+  - Steps for Copilot to perform the update:
     - Provide copilot a list of new files to add/replace locally from the `nathlan/shared-assets` repository. 
       - If you instruct copilot to retrieve the new file, make sure it removes the preamble before the code starts. For example, on the first line, the code used to be just `#`, but after copilot processed the file it looked like this: `successfully downloaded text file (SHA: ef9bd9a087ef88a25981e3a00bb335ca5af6ba07)#`
       - You should only instruct copilot to replace an entire file if the local file has no unique content that is not present in the source file. 
