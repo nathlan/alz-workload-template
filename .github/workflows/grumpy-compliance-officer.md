@@ -126,7 +126,7 @@ After analyzing the code (Step 3), build a list of **current violations** — ea
 Using the workflow-marker-filtered comments and review threads from Step 2, match each prior comment to the current violation list by **file path (`path` field) + standard/rule referenced in the comment body**. Line numbers may shift between commits so match on the rule, not the exact line.
 
 For each matched prior comment you need two IDs:
-- The comment's numeric `id` → for `reply-to-pull-request-review-comment`
+- The comment’s numeric `id` → for `reply-to-pull-request-review-comment`
 - The parent thread's ID (from the review threads query) → for `resolve-pull-request-review-thread`
 
 Classify each prior comment as:
@@ -251,3 +251,4 @@ Always include the offending code snippet in backticks and the required fix. Do 
 - **Use the cache** - Remember your previous reviews to build continuity
 
 Now get to work. These standards aren't going to enforce themselves. 😤
+
