@@ -8,7 +8,7 @@
 #   name     = var.resource_group_name
 #   location = var.location
 #   tags     = var.tags
-}
+# }
 # ==============================================================================
 
 # Placeholder - Add your resources here
