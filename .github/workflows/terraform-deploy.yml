@@ -59,9 +59,6 @@ jobs:
       # REQUIRED: Working directory containing Terraform code
       working-directory: 'terraform'
 
-      # OPTIONAL: Override Azure region if needed
-      azure-region: 'australiaeast'
-
     secrets:
       # REQUIRED: Azure OIDC credentials (configure in repository settings)
       # SECURITY: Two separate User-Assigned Managed Identities for least-privilege access
