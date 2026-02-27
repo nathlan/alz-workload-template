@@ -41,17 +41,19 @@ This repository uses a parent/child workflow pattern:
 Add these secrets in **Settings → Secrets and variables → Actions**:
 
 ```
-AZURE_CLIENT_ID_PLAN  - User-Assigned Managed Identity Client ID for plan (Reader role)
-AZURE_CLIENT_ID_APPLY - User-Assigned Managed Identity Client ID for apply (Owner role)
-AZURE_TENANT_ID       - Azure tenant ID
-AZURE_SUBSCRIPTION_ID - Azure subscription ID
+AZURE_CLIENT_ID_TFSTATE - User-Assigned Managed Identity Client ID for backend state access (Storage Blob Data Contributor)
+AZURE_CLIENT_ID_PLAN    - User-Assigned Managed Identity Client ID for plan (Reader role)
+AZURE_CLIENT_ID_APPLY   - User-Assigned Managed Identity Client ID for apply (Owner role)
+AZURE_TENANT_ID         - Azure tenant ID for the workload subscription
+AZURE_SUBSCRIPTION_ID   - Azure subscription ID
 ```
 
 **Security Model: Least Privilege**
-- **Plan Identity (Reader):** Used for `terraform init` and `terraform plan` operations. Has read-only access to assess changes.
+- **State Identity (Storage Blob Data Contributor):** Used exclusively for `terraform init` to read/write backend state. Supports cross-tenant storage accounts via `tenant_id` in the backend config.
+- **Plan Identity (Reader):** Used for `terraform plan` operations. Has read-only access to assess changes.
 - **Apply Identity (Owner):** Used for `terraform apply` operations. Has full access to create, modify, and delete resources.
 
-This separation ensures that plan operations cannot accidentally modify infrastructure.
+This separation ensures that plan operations cannot accidentally modify infrastructure, and backend state access is isolated from infrastructure permissions.
 
 ### 2. Create Environment
 
@@ -72,9 +74,13 @@ terraform {
     container_name       = "tfstate"
     key                  = "[workload-name]-production.tfstate"
     use_oidc             = true
+    # If your backend storage account is in a different Azure tenant, uncomment:
+    # tenant_id          = "backend-tenant-id"
   }
 }
 ```
+
+> **Cross-tenant backend:** If your Terraform state storage account is in a different Azure tenant, set `tenant_id` in the backend block to that tenant's ID. Ensure `AZURE_CLIENT_ID_TFSTATE` belongs to the backend tenant and has the correct federated credential subjects (see OIDC setup below).
 
 ### 4. Add Your Infrastructure Code
 
@@ -96,15 +102,65 @@ Add your Terraform resources to the `terraform/` directory:
 
 This repository uses **User-Assigned Managed Identities (UAMIs)** with federated credentials for secure, passwordless authentication to Azure.
 
-### Setup Two Managed Identities
+### Setup Three Managed Identities
 
-You need to create TWO separate managed identities with federated credentials:
+You need to create THREE separate managed identities:
 
-#### 1. Plan Identity (Reader Role)
+#### 1. State Identity (Storage Blob Data Contributor)
+
+Used by `terraform init` to read/write backend state. Supports both same-tenant and cross-tenant storage accounts.
+
+```bash
+RESOURCE_GROUP="rg-github-identities"
+TFSTATE_IDENTITY_NAME="uami-github-${REPO_NAME}-tfstate"
+
+az identity create \
+  --resource-group $RESOURCE_GROUP \
+  --name $TFSTATE_IDENTITY_NAME
+
+TFSTATE_CLIENT_ID=$(az identity show \
+  --resource-group $RESOURCE_GROUP \
+  --name $TFSTATE_IDENTITY_NAME \
+  --query clientId -o tsv)
+
+# Assign Storage Blob Data Contributor on the state storage account
+az role assignment create \
+  --assignee $TFSTATE_CLIENT_ID \
+  --role "Storage Blob Data Contributor" \
+  --scope "/subscriptions/${STATE_SUBSCRIPTION_ID}/resourceGroups/${STATE_RESOURCE_GROUP}/providers/Microsoft.Storage/storageAccounts/${STATE_STORAGE_ACCOUNT}"
+
+# Add federated credential for plan operations (no environment context)
+az identity federated-credential create \
+  --identity-name $TFSTATE_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-tfstate-pr" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:pull_request" \
+  --audiences "api://AzureADTokenExchange"
+
+# Add federated credential for apply operations (environment context)
+az identity federated-credential create \
+  --identity-name $TFSTATE_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-tfstate-env" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:environment:production" \
+  --audiences "api://AzureADTokenExchange"
+
+# Add federated credential for push-to-main (workflow_dispatch and push)
+az identity federated-credential create \
+  --identity-name $TFSTATE_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-tfstate-main" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:ref:refs/heads/main" \
+  --audiences "api://AzureADTokenExchange"
+```
+
+#### 2. Plan Identity (Reader Role)
 
 ```bash
 # Create User-Assigned Managed Identity for plan operations
-RESOURCE_GROUP="rg-github-identities"
 PLAN_IDENTITY_NAME="uami-github-${REPO_NAME}-plan"
 
 az identity create \
@@ -123,17 +179,26 @@ az role assignment create \
   --role Reader \
   --scope "/subscriptions/${SUBSCRIPTION_ID}"
 
-# Add federated credential for GitHub Actions
+# Add federated credential for pull requests (no environment context in plan job)
 az identity federated-credential create \
   --identity-name $PLAN_IDENTITY_NAME \
   --resource-group $RESOURCE_GROUP \
-  --name "github-${REPO_NAME}-plan" \
+  --name "github-${REPO_NAME}-plan-pr" \
   --issuer "https://token.actions.githubusercontent.com" \
-  --subject "repo:nathlan/${REPO_NAME}:environment:production" \
+  --subject "repo:nathlan/${REPO_NAME}:pull_request" \
+  --audiences "api://AzureADTokenExchange"
+
+# Add federated credential for push-to-main
+az identity federated-credential create \
+  --identity-name $PLAN_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-plan-main" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:ref:refs/heads/main" \
   --audiences "api://AzureADTokenExchange"
 ```
 
-#### 2. Apply Identity (Owner Role)
+#### 3. Apply Identity (Owner Role)
 
 ```bash
 # Create User-Assigned Managed Identity for apply operations
@@ -155,7 +220,7 @@ az role assignment create \
   --role Owner \
   --scope "/subscriptions/${SUBSCRIPTION_ID}"
 
-# Add federated credential for GitHub Actions
+# Add federated credential for apply operations (environment context in apply job)
 az identity federated-credential create \
   --identity-name $APPLY_IDENTITY_NAME \
   --resource-group $RESOURCE_GROUP \
@@ -165,15 +230,24 @@ az identity federated-credential create \
   --audiences "api://AzureADTokenExchange"
 ```
 
-#### 3. Add Client IDs to GitHub Secrets
+#### 4. Add Client IDs to GitHub Secrets
 
 ```bash
-# Add the plan identity client ID
+gh secret set AZURE_CLIENT_ID_TFSTATE --body "$TFSTATE_CLIENT_ID" --repo nathlan/${REPO_NAME}
 gh secret set AZURE_CLIENT_ID_PLAN --body "$PLAN_CLIENT_ID" --repo nathlan/${REPO_NAME}
-
-# Add the apply identity client ID
 gh secret set AZURE_CLIENT_ID_APPLY --body "$APPLY_CLIENT_ID" --repo nathlan/${REPO_NAME}
 ```
+
+### Why Three Identities?
+
+The `terraform init` step (backend access) and `terraform plan`/`apply` steps run with different OIDC token subjects:
+
+| Job | GitHub context | OIDC subject |
+|-----|---------------|--------------|
+| plan | No environment | `repo:<org>/<repo>:pull_request` or `ref:refs/heads/main` |
+| apply | `environment: production` | `repo:<org>/<repo>:environment:production` |
+
+This means the PLAN identity and TFSTATE identity both need **non-environment** federated credentials, while APPLY only needs the **environment** credential. Using a dedicated TFSTATE identity also allows the state storage account to be in a **different Azure tenant** by setting `tenant_id` in the backend configuration.
 
 ### Benefits of UAMIs
 

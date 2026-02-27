@@ -13,6 +13,8 @@
 #     container_name       = "tfstate"
 #     key                  = "workload-template.tfstate" # UPDATE: Change to your workload name
 #     use_oidc             = true
+#     # If your backend storage account is in a different Azure tenant, uncomment and set:
+#     # tenant_id            = "backend-tenant-id"      # UPDATE: Backend storage account tenant ID
 #   }
 
 #   required_providers {
