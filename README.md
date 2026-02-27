@@ -41,17 +41,19 @@ This repository uses a parent/child workflow pattern:
 Add these secrets in **Settings → Secrets and variables → Actions**:
 
 ```
-AZURE_CLIENT_ID_PLAN  - User-Assigned Managed Identity Client ID for plan (Reader role)
-AZURE_CLIENT_ID_APPLY - User-Assigned Managed Identity Client ID for apply (Owner role)
-AZURE_TENANT_ID       - Azure tenant ID
-AZURE_SUBSCRIPTION_ID - Azure subscription ID
+AZURE_CLIENT_ID_TFSTATE - User-Assigned Managed Identity Client ID for terraform init/backend state access
+AZURE_CLIENT_ID_PLAN    - User-Assigned Managed Identity Client ID for plan (Reader role)
+AZURE_CLIENT_ID_APPLY   - User-Assigned Managed Identity Client ID for apply (Owner role)
+AZURE_TENANT_ID         - Azure tenant ID
+AZURE_SUBSCRIPTION_ID   - Azure subscription ID
 ```
 
 **Security Model: Least Privilege**
-- **Plan Identity (Reader):** Used for `terraform init` and `terraform plan` operations. Has read-only access to assess changes.
+- **TFState Identity:** Used exclusively for `terraform init` (backend state access). Requires `Storage Blob Data Contributor` role on the tfstate container.
+- **Plan Identity (Reader):** Used for `terraform plan` operations. Has read-only access to assess changes.
 - **Apply Identity (Owner):** Used for `terraform apply` operations. Has full access to create, modify, and delete resources.
 
-This separation ensures that plan operations cannot accidentally modify infrastructure.
+This separation ensures that plan and apply operations cannot access backend state beyond what is required.
 
 ### 2. Create Environment
 
@@ -165,9 +167,49 @@ az identity federated-credential create \
   --audiences "api://AzureADTokenExchange"
 ```
 
-#### 3. Add Client IDs to GitHub Secrets
+#### 3. TFState Identity (Storage Blob Data Contributor)
 
 ```bash
+# Create User-Assigned Managed Identity for backend state operations
+TFSTATE_IDENTITY_NAME="uami-github-${REPO_NAME}-tfstate"
+
+az identity create \
+  --resource-group $RESOURCE_GROUP \
+  --name $TFSTATE_IDENTITY_NAME
+
+# Get the client ID
+TFSTATE_CLIENT_ID=$(az identity show \
+  --resource-group $RESOURCE_GROUP \
+  --name $TFSTATE_IDENTITY_NAME \
+  --query clientId -o tsv)
+
+# Assign Storage Blob Data Contributor role scoped to the tfstate container
+STATE_STORAGE_ID=$(az storage account show \
+  --name stterraformstate \
+  --resource-group rg-terraform-state \
+  --query id -o tsv)
+
+az role assignment create \
+  --assignee $TFSTATE_CLIENT_ID \
+  --role "Storage Blob Data Contributor" \
+  --scope "${STATE_STORAGE_ID}/blobServices/default/containers/tfstate"
+
+# Add federated credential for GitHub Actions
+az identity federated-credential create \
+  --identity-name $TFSTATE_IDENTITY_NAME \
+  --resource-group $RESOURCE_GROUP \
+  --name "github-${REPO_NAME}-tfstate" \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:nathlan/${REPO_NAME}:environment:production" \
+  --audiences "api://AzureADTokenExchange"
+```
+
+#### 4. Add Client IDs to GitHub Secrets
+
+```bash
+# Add the tfstate identity client ID
+gh secret set AZURE_CLIENT_ID_TFSTATE --body "$TFSTATE_CLIENT_ID" --repo nathlan/${REPO_NAME}
+
 # Add the plan identity client ID
 gh secret set AZURE_CLIENT_ID_PLAN --body "$PLAN_CLIENT_ID" --repo nathlan/${REPO_NAME}
 
@@ -178,7 +220,7 @@ gh secret set AZURE_CLIENT_ID_APPLY --body "$APPLY_CLIENT_ID" --repo nathlan/${R
 ### Benefits of UAMIs
 
 - ✅ **No stored credentials** - Client IDs are not sensitive
-- ✅ **Least privilege** - Plan uses read-only, apply uses elevated permissions
+- ✅ **Least privilege** - TFState uses storage-only access, plan uses read-only, apply uses elevated permissions
 - ✅ **Audit trail** - Each identity's actions tracked separately in Azure
 - ✅ **Defense in depth** - Compromised plan job cannot modify infrastructure
 
