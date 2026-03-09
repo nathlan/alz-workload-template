@@ -1,0 +1,64 @@
+name: Azure Terraform CI/CD
+
+# ============================================================================
+# CHILD WORKFLOW - Calls Reusable Parent Workflow
+# ============================================================================
+# This workflow calls the centralized reusable workflow for Azure Terraform
+# deployments. The parent workflow handles validation, security scanning,
+# planning, and deployment with OIDC authentication.
+#
+# INHERITED VARS (resolved from this repo's vars context by the reusable workflow):
+#
+# Organisation-level vars (set once at org level, inherited by all repos):
+#   AZURE_CLIENT_ID_TFSTATE  — App Registration client ID for state access
+#   AZURE_TENANT_ID          — Azure AD tenant ID
+#   BACKEND_STORAGE_ACCOUNT  — Storage account name for Terraform state
+#   BACKEND_CONTAINER         — Blob container name for Terraform state
+#
+# Repository-level vars (set in this repo's Settings > Variables):
+#   AZURE_CLIENT_ID_PLAN     — Managed Identity client ID for plan (Reader)
+#   AZURE_CLIENT_ID_APPLY    — Managed Identity client ID for apply (Owner)
+#   AZURE_SUBSCRIPTION_ID    — Target Azure subscription ID
+#
+# These vars are read directly by the reusable workflow — no need to pass
+# them as inputs or secrets.
+# ============================================================================
+
+on:
+  # Trigger on pushes to main branch (after PR merge)
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/azure-terraform-cicd-caller.yml'
+
+  # Trigger on pull requests to main (for plan validation)
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/azure-terraform-cicd-caller.yml'
+
+  # Allow manual triggering for testing and emergency deployments
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+  issues: write
+  security-events: write
+  
+jobs:
+  # Call the parent reusable workflow from the central repository
+  deploy:
+    name: Deploy to Azure
+    uses: nathlan/shared-assets/.github/workflows/azure-terraform-cicd-reusable.yml@main
+
+    with:
+      # REQUIRED: Working directory containing Terraform code
+      working-directory: 'terraform'
+
+
